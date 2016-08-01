@@ -1,0 +1,7 @@
+name: BiomeMap
+main: com.timgaming.biomemap.Main
+version: 1.0
+author: Pheonix_Knight
+commands:
+  Map-Biomes:
+    description: Creates a color coded pixel map corresponding to the Biomes of a specified world. Configure options in the mapConfig.yml.
