@@ -1,10 +1,9 @@
 package com.timgaming.biomemap;
 
+import net.minecraft.server.v1_9_R2.BiomeVoid;
 import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
-import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -20,39 +19,37 @@ import java.io.*;
 public class Main extends JavaPlugin {
 
     private CommandSender sender;
+    private Player player;
     private String sWorld;
+    private String settingsPath = "./plugins/BiomeMap/";
     private World world;
 
     @Override
     public void onEnable() {
         //logic to be performed when the plugin is enabled
-        getLogger().info("onEnable has been invoked!");
-
     }
 
     @Override
     public void onDisable() {
         //logic to be performed when the plugin is disabled
-        getLogger().info("onDisable has been invoked!");
-
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args){
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
 
         this.sender = sender;
 
-        if(cmd.getName().equalsIgnoreCase("Map-Biomes")) {
+        if (cmd.getName().equalsIgnoreCase("Map-Biomes")) {
             if (!(sender instanceof Player)) {
 
-                //Check for a specific sWorld
+                //Check for a specific world
                 try {
                     sWorld = args[0];
 
                     try {
                         world = Bukkit.getServer().getWorld(sWorld);
 
-                    } catch (Exception e){
+                    } catch (Exception e) {
                         sender.sendMessage("That world does not exist.");
                         return false;
                     }
@@ -63,100 +60,117 @@ public class Main extends JavaPlugin {
                     return false;
                 }
 
-                //Generate a pixmap of the biomes of that sWorld
+                sender.sendMessage("Mapping biomes...");
+                //Generate a pixmap of the biomes of that world
                 mapBiomes();
+                sender.sendMessage("Biomes mapped!");
 
                 return true;
 
             } else {
-                //TODO in-game command
-                sender.sendMessage("This command can only be run by the server admin.");
+                player = (Player) sender;
+
+                if(player.isOp()) {
+                    world = player.getWorld();
+
+                    player.sendMessage("Mapping biomes...");
+                    //Generate a pixmap of the biomes of that world
+                    mapBiomes();
+                    player.sendMessage("Biomes mapped!");
+                    return true;
+
+                } else
+                    sender.sendMessage("This command can only be run by the server admin.");
             }
         }
         return false;
     }
 
-    private void mapBiomes(){
+    private void mapBiomes() {
 
         String line;
         String[] data;
-        int minX = 0, maxX = 0, minZ = 0, maxZ = 0, w = 0, h = 0;
-
-        //Get the file
-        FileInputStream config;
-        InputStreamReader stream;
-        BufferedReader reader;
+        int minX = 0, maxX = 0, minZ = 0, maxZ = 0;
+        int size = 0;
 
         try {
-            config = new FileInputStream("mapConfig.yml");
-            stream = new InputStreamReader(config);
-            reader = new BufferedReader(stream);
+            sender.sendMessage("Getting configuration...");
+            File conf = new File(settingsPath + "mapconfig.yml");
+            FileInputStream config = new FileInputStream(conf);
+            InputStreamReader stream = new InputStreamReader(config);
+            BufferedReader reader = new BufferedReader(stream);
 
             //Read it
             try {
-                while ((line = reader.readLine()) != null){
+                while ((line = reader.readLine()) != null) {
+                    if (!line.startsWith("#")) {
+                        line = line.replaceAll("\\s", "");
+                        data = line.split("=");
 
-                    line = line.replaceAll("\\s", "");
-                    data = line.split("=");
-
-                    //Set the map variables by the config data
-                    switch (data[0]){
-                        case "minX":
-                            minX = Integer.parseInt(data[1]);
-                            break;
-                        case "minY":
-                            minZ = Integer.parseInt(data[1]);
-                            break;
-                        case "maxX":
-                            maxX = Integer.parseInt(data[1]);
-                            break;
-                        case "maxY":
-                            maxZ = Integer.parseInt(data[1]);
-                            break;
-                        case "width":
-                            w = Integer.parseInt(data[1]);
-                            break;
-                        case "height":
-                            h = Integer.parseInt(data[1]);
-                            break;
-                        default:
-                            break;
+                        //Set the map variables by the config data
+                        switch (data[0]) {
+                            case "minX":
+                                minX = Integer.parseInt(data[1]);
+                                break;
+                            case "minZ":
+                                minZ = Integer.parseInt(data[1]);
+                                break;
+                            case "maxX":
+                                maxX = Integer.parseInt(data[1]);
+                                break;
+                            case "maxZ":
+                                maxZ = Integer.parseInt(data[1]);
+                                break;
+                            case "image-size":
+                                size = Integer.parseInt(data[1]);
+                                break;
+                            default:
+                                break;
+                        }
                     }
-
                 }
             } catch (IOException e) {
-                System.out.println("File could not be read.");
+                sender.sendMessage("Settings file could not be read.");
                 e.printStackTrace();
             }
-
-//            System.out.format("World Map: Min X= %d Max X= %d Min Y= %d Max Y= %d Pix Map: Width = %d Height = %d",
-//                    minX, maxX, minZ, maxZ, w, h);
-
         } catch (FileNotFoundException e) {
-            System.out.println("File could not be found.");
+            sender.sendMessage("Settings file not found.");
             e.printStackTrace();
         }
 
-        BufferedImage map = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        //Create the image
+        int x, z, scale, minXZ;
+        float width, height, xScale, zScale;
+        width = maxX - minX;
+        height = maxZ - minZ;
+        xScale = width / size;//Calculate the number of blocks per pixel on the x-axis (scale)
+        zScale = height / size;//Calculate the number of blocks per pixel on the z-axis (scale)
+        scale = (int) ((xScale > zScale) ? xScale : zScale);//keep the bigger scale
+        minXZ = (Math.abs(minX) > Math.abs(minZ)) ? minX : minZ;//keep the more distant min coordinate
+        width /= scale;
+        height /= scale;
+        BufferedImage map = new BufferedImage((int)width, (int)height, BufferedImage.TYPE_INT_RGB);
 
-        int x, z;
-        float xScale = (maxX - minX) / w;
-        float zScale = (maxZ - minZ) / h;
-        if(world != null) {
-            for (int py = 0; py < h; py++) {
-                for (int px = 0; px < w; px++) {
+        sender.sendMessage("Creating a map of size " + (int)width + "x" + (int)height + ", with a resolution of " +
+                scale + " block(s) per pixel.");
+        sender.sendMessage("Gathering data...");
+
+        if (world != null) {
+            for (int py = 0; py < height; py++) {
+                for (int px = 0; px < width; px++) {
 
                     //Get the coordinates in the world that correspond to this pixel
-                    x = (int)(px * xScale + minX);
-                    z = (int)(py * zScale + minZ);
+                    x = px * scale + minXZ;
+                    z = py * scale + minXZ;
 
                     map.setRGB(px, py, biomeToColor(world.getBiome(x, z)));
-
                 }
             }
         }
 
-        File pixmap = new File(sWorld + ".png");
+        sender.sendMessage("Saving file.");
+
+        File pixmap = new File(settingsPath + sWorld + ".png");
         try {
             ImageIO.write(map, "png", pixmap);
         } catch (IOException e) {
@@ -164,12 +178,39 @@ public class Main extends JavaPlugin {
         }
     }
 
-    private int biomeToColor(Biome biome){
-        switch (biome){
-            case FOREST_HILLS:
-                return 5524256; //Forest Hills
-            default:
-                return 16777215; //White
+    private int biomeToColor(Biome biome) {
+
+        int rgb = 1644825;//Dark gray
+        String line;
+        String[] data;
+        boolean found = false;
+
+        try {
+            FileInputStream table = new FileInputStream(settingsPath + "biomecolors.settings");
+            InputStreamReader reader = new InputStreamReader(table);
+            BufferedReader buffer = new BufferedReader(reader);
+
+            try {
+                while ((line = buffer.readLine()) != null && !found) {
+                    if (!line.startsWith("#")) {
+                        line = line.replaceAll("\\s", "");
+                        data = line.split(":");
+                        if (data[0].equals(biome.name())) {
+                            rgb = Integer.decode(data[1]);
+                            found = true;
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                sender.sendMessage("Color settings file could not be read.");
+                e.printStackTrace();
+            }
+
+        } catch (FileNotFoundException e) {
+            sender.sendMessage("Color settings file not found.");
+            e.printStackTrace();
         }
+
+        return rgb;
     }
 }
