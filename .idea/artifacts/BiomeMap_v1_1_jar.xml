@@ -1,5 +1,5 @@
 <component name="ArtifactManager">
-  <artifact type="jar" name="BiomeMap:jar">
+  <artifact type="jar" name="BiomeMap_v1.1:jar">
     <output-path>$USER_HOME$/Minecraft/Spigot_Servers/1.9.4/plugins</output-path>
     <root id="archive" name="BiomeMap.jar">
       <element id="module-output" name="BiomeMap" />

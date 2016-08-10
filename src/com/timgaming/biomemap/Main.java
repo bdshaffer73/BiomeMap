@@ -12,6 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.util.ArrayList;
 
 /**
  * Created by pheonix on 7/31/16.
@@ -23,6 +24,8 @@ public class Main extends JavaPlugin {
     private String sWorld;
     private String settingsPath = "./plugins/BiomeMap/";
     private World world;
+    private ArrayList<String> biomes;
+    private ArrayList<Integer> bColors;
 
     @Override
     public void onEnable() {
@@ -95,8 +98,7 @@ public class Main extends JavaPlugin {
 
         try {
             sender.sendMessage("Getting configuration...");
-            File conf = new File(settingsPath + "mapconfig.yml");
-            FileInputStream config = new FileInputStream(conf);
+            FileInputStream config = new FileInputStream(settingsPath + "mapconfig.yml");
             InputStreamReader stream = new InputStreamReader(config);
             BufferedReader reader = new BufferedReader(stream);
 
@@ -131,33 +133,41 @@ public class Main extends JavaPlugin {
                 }
             } catch (IOException e) {
                 sender.sendMessage("Settings file could not be read.");
-                e.printStackTrace();
+            }
+
+            try {
+                reader.close();
+                stream.close();
+                config.close();
+            } catch (IOException e) {
+                sender.sendMessage("Config file failed to close.");
             }
         } catch (FileNotFoundException e) {
             sender.sendMessage("Settings file not found.");
-            e.printStackTrace();
         }
 
         //Create the image
         int x, z, scale, minXZ;
-        float width, height, xScale, zScale;
-        width = maxX - minX;
-        height = maxZ - minZ;
-        xScale = width / size;//Calculate the number of blocks per pixel on the x-axis (scale)
-        zScale = height / size;//Calculate the number of blocks per pixel on the z-axis (scale)
+        float iWidth, iHeight, wWidth, wHeight, xScale, zScale;
+        wWidth = maxX - minX;
+        wHeight = maxZ - minZ;
+        xScale = wWidth / size;//Calculate the number of blocks per pixel on the x-axis (scale)
+        zScale = wHeight / size;//Calculate the number of blocks per pixel on the z-axis (scale)
         scale = (int) ((xScale > zScale) ? xScale : zScale);//keep the bigger scale
         minXZ = (Math.abs(minX) > Math.abs(minZ)) ? minX : minZ;//keep the more distant min coordinate
-        width /= scale;
-        height /= scale;
-        BufferedImage map = new BufferedImage((int)width, (int)height, BufferedImage.TYPE_INT_RGB);
+        iWidth = wHeight <= wWidth ? size : (wWidth / scale);
+        iHeight = wWidth >= wHeight ? size : (wHeight / scale);
+        BufferedImage map = new BufferedImage((int)iWidth, (int)iHeight, BufferedImage.TYPE_INT_RGB);
 
-        sender.sendMessage("Creating a map of size " + (int)width + "x" + (int)height + ", with a resolution of " +
+        sender.sendMessage("Creating a map of size " + (int)iWidth + "x" + (int)iHeight + ", with a resolution of " +
                 scale + " block(s) per pixel.");
         sender.sendMessage("Gathering data...");
 
+        setColors();
+
         if (world != null) {
-            for (int py = 0; py < height; py++) {
-                for (int px = 0; px < width; px++) {
+            for (int py = 0; py < iHeight; py++) {
+                for (int px = 0; px < iWidth; px++) {
 
                     //Get the coordinates in the world that correspond to this pixel
                     x = px * scale + minXZ;
@@ -176,14 +186,43 @@ public class Main extends JavaPlugin {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        biomes.clear();
+        bColors.clear();
     }
 
+    /**
+     * Searches the list of biomes for the biome provided, and returns an int conversion of the corresponding hex color code.
+     *
+     * @param biome The biome to be searched for.
+     * @return The integer color code for the given biome.
+     */
     private int biomeToColor(Biome biome) {
 
         int rgb = 1644825;//Dark gray
+        String name;
+
+        for(int i = 0; i < biomes.size(); i++){ //Find the biome in the list by the biome provided
+            name = biomes.get(i);
+            if(name.equals(biome.name())) {
+                rgb = bColors.get(i);           //Gets the integer code of the color corresponding to the found biome.
+                i = biomes.size();
+            }
+        }
+
+        return rgb;
+    }
+
+    /**
+     * Sets the list of color codes and
+     */
+    private void setColors() {
+
         String line;
         String[] data;
-        boolean found = false;
+
+        biomes = new ArrayList<>();
+        bColors = new ArrayList<>();
 
         try {
             FileInputStream table = new FileInputStream(settingsPath + "biomecolors.settings");
@@ -191,26 +230,29 @@ public class Main extends JavaPlugin {
             BufferedReader buffer = new BufferedReader(reader);
 
             try {
-                while ((line = buffer.readLine()) != null && !found) {
-                    if (!line.startsWith("#")) {
+                while ((line = buffer.readLine()) != null) {
+                    if (!line.startsWith("#")) {                //If it's not a comment
                         line = line.replaceAll("\\s", "");
                         data = line.split(":");
-                        if (data[0].equals(biome.name())) {
-                            rgb = Integer.decode(data[1]);
-                            found = true;
-                        }
+                        biomes.add(data[0]);                    //Add the biome name to the biomes list
+                        bColors.add(Integer.decode(data[1]));   //Add the biome color (int) to the bColors list
                     }
                 }
             } catch (IOException e) {
                 sender.sendMessage("Color settings file could not be read.");
-                e.printStackTrace();
+            }
+
+            try {
+                buffer.close();
+                reader.close();
+                table.close();
+            } catch (IOException e) {
+                sender.sendMessage("Color settings file failed to close.");
             }
 
         } catch (FileNotFoundException e) {
             sender.sendMessage("Color settings file not found.");
-            e.printStackTrace();
         }
 
-        return rgb;
     }
 }
